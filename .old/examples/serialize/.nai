@@ -1,0 +1,208 @@
+#define NAI_FLAGS "-I../../"
+#include "nai.h"
+#include "nm.h"
+
+
+typedef enum {
+    TYPE_INT,
+    TYPE_FLOAT,
+    TYPE_STRING,
+} Simple_Type;
+
+
+typedef struct {
+    enum {
+        KIND_SIMPLE,
+        KIND_STRUCTURE,
+    } kind;
+
+    union {
+        Simple_Type simple;
+        String_View structure;
+    };
+} Type;
+
+
+typedef struct {
+    Type type;
+    String_View name;
+    bool hidden;
+} Field;
+
+typedef Array(Field) Fields;
+
+
+typedef struct {
+    String_View name;
+    Fields fields;
+} Structure;
+
+typedef Array(Structure) Structures;
+
+
+bool parse_type(Token_Stream *stream, Type *type)
+{
+    if (ts_expect_id(stream, "int")) {
+        type->kind = KIND_SIMPLE;
+        type->simple = TYPE_INT;
+        return true;
+    }
+    
+    if (ts_expect_id(stream, "float")) {
+        type->kind = KIND_SIMPLE;
+        type->simple = TYPE_FLOAT;
+        return true;
+    }
+
+    if (ts_expect_id(stream, "const")) {
+        if (!ts_expect_id(stream, "char")) return false;
+        if (!ts_expect_type(stream, '*')) return false;
+
+        type->kind = KIND_SIMPLE;
+        type->simple = TYPE_STRING;
+        return true;
+    }
+
+    String_View name = ts_tok(stream).value;
+
+    if (ts_expect_type(stream, TT_ID)) {
+        type->kind = KIND_STRUCTURE;
+        type->structure = name;
+        return true;
+    }
+
+    return false;
+}
+
+
+bool parse_field(Token_Stream *stream, Field *field)
+{
+    if (!parse_type(stream, &field->type)) return false;
+
+    field->name = ts_tok(stream).value;
+    if (!ts_expect_type(stream, TT_ID)) return false;
+
+    if (!ts_expect_type(stream, ';')) return false;
+
+    if (ts_expect_id(stream, "ATTRIBUTE")) {
+        if (!ts_expect_type(stream, '(')) return false;
+        if (!ts_expect_id(stream, "hidden")) return false;
+        if (!ts_expect_type(stream, ')')) return false;
+
+        field->hidden = true;
+        return true;
+    }
+
+    return true;
+}
+
+
+bool parse_structure(Token_Stream *stream, Structure *structure)
+{
+    if (!ts_expect_id(stream, "SERIALIZE")) return false;
+    if (!ts_expect_id(stream, "typedef")) return false;
+    if (!ts_expect_id(stream, "struct")) return false;
+    if (!ts_expect_type(stream, '{')) return false;
+
+    while (true) {
+        if (ts_expect_type(stream, '}')) {
+            break;
+        }
+        
+        Field field = {0};
+        if (!parse_field(stream, &field)) return false;
+
+        array_append(&structure->fields, field);
+    }
+
+    structure->name = ts_tok(stream).value;
+    if (!ts_expect_type(stream, TT_ID)) return false;
+    if (!ts_expect_type(stream, ';')) return false;
+
+    return true;
+}
+
+
+void print_serializer(String_Builder *out, Structure structure)
+{
+    sb_print_many(out, {S "void _serialize_"},
+                       {SV structure.name},
+                       {S "("},
+                       {SV structure.name},
+                       {S " v)\n"});
+
+    sb_printf(out, "{\n");
+    sb_printf(out, "    printf(\"{\");\n");
+
+    array_foreach(Field, field, &structure.fields) {
+        if (field->hidden) continue;
+
+        if (field - structure.fields.items > 0) {
+            sb_printf(out, "    printf(\", \");\n");
+        }
+
+        sb_print_many(out, {S "    printf(\"\\\""},
+                           {SV field->name},
+                           {S "\\\": \");"});
+
+        switch (field->type.kind) {
+        case KIND_SIMPLE:
+            sb_printf(out, "    printf(\"");
+
+            switch (field->type.simple) {
+            case TYPE_INT:
+                sb_print_many(out, {S "%d\", v."},
+                                   {SV field->name},
+                                   {S ");\n"});
+                break;
+            case TYPE_FLOAT:
+                sb_print_many(out, {S "%f\", v."},
+                                   {SV field->name},
+                                   {S ");\n"});
+                break;
+            case TYPE_STRING:
+                sb_print_many(out, {S "\\\"%s\\\"\", v."},
+                                   {SV field->name},
+                                   {S ");\n"});
+                break;
+            }
+
+            break;
+
+        case KIND_STRUCTURE:
+            sb_print_many(out, {S "    _serialize_"},
+                               {SV field->type.structure},
+                               {S "(v."},
+                               {SV field->name},
+                               {S ");\n"});
+            break;
+        }
+    }
+
+    sb_printf(out, "    printf(\"}\");\n");
+    sb_printf(out, "}\n\n");
+}
+
+
+int main(int argc, char **argv)
+{
+    REBUILD(argc, argv);
+
+    Lexer lexer = lex_file("main.c");
+    Token_Stream stream = lexer_to_ts(lexer);
+
+    Structures structures = ts_match(Structures, stream, parse_structure);
+
+    String_Builder defs = {0};
+    sb_printf(&defs, "#include <stdio.h>\n");
+    array_foreach(Structure, structure, &structures) {
+        print_serializer(&defs, *structure);
+    }
+
+    write_file("generated/serializers.c", defs);
+
+    add_build_file("main.c", .out = "build/main");
+    run_build();
+
+    return 0;
+}

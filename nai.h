@@ -32,14 +32,26 @@ SOFTWARE. */
 
 
 
+#ifndef NAI_FLAGS
+#define NAI_FLAGS ""
+#endif
 
 
 #define NAI_TODO(msg) assert(0 && "TODO: "msg)
+
+#define nai_log_info(fmt, ...) printf("\x1b[36m[INFO]\x1b[0m "fmt"\n", ##__VA_ARGS__)
+
+#define nai_log_help(fmt, ...) printf("\x1b[32m[HELP]\x1b[0m\x1b[2m "fmt"\x1b[0m\n", ##__VA_ARGS__)
+
+#define nai_log_warning(fmt, ...) printf("\x1b[33m[WARNING]\x1b[0m "fmt"\n", ##__VA_ARGS__)
+
+#define nai_log_error(fmt, ...) printf("\x1b[31m[ERROR]\x1b[0m "fmt"\n", ##__VA_ARGS__)
 
 
 #ifndef NAI_GLOBAL_ARENA_SIZE
 #define NAI_GLOBAL_ARENA_SIZE 16 * 1024 * 1024
 #endif
+
 
 static struct {
     void *memory;
@@ -68,8 +80,6 @@ __attribute__((format(printf, 1, 2)))
 const char *nai_temp_sprintf(const char *fmt, ...);
 void nai_sb_print_null(Nai_String_Builder *sb);
 
-
-
 typedef struct {
     const char *data;
     size_t count;
@@ -83,6 +93,8 @@ Nai_String_Builder nai_sv_to_sb(Nai_String_View sv);
 bool nai_sv_equals(Nai_String_View sv, const char *cstr);
 Nai_String_View nai_sv_chop_space(Nai_String_View *sv);
 Nai_String_View nai_sv_chop(Nai_String_View *sv, char delim);
+Nai_String_View nai_sv_split(Nai_String_View *sv, const char *delim);
+Nai_String_View nai_sv_trim(Nai_String_View sv);
 Nai_String_View nai_sv_chop_right(Nai_String_View sv, char delim);
 Nai_String_View nai_sv_from_cstr(const char *cstr);
 
@@ -91,7 +103,7 @@ Nai_String_View nai_sv_from_cstr(const char *cstr);
 #ifndef NAI_ARRAY_INIT_CAPACITY
 #define NAI_ARRAY_INIT_CAPACITY 16
 #endif
-
+ 
 #define Nai_Array(type) struct { \
     type *items; \
     size_t count; \
@@ -112,125 +124,35 @@ Nai_String_View nai_sv_from_cstr(const char *cstr);
     (array)->items[(array)->count++] = (__VA_ARGS__); \
 } while (0)
 
-#define nai_array_append_void(array, size, ...) do { \
-    if ((array)->count >= (array)->capacity) { \
-        size_t _new_capacity = (array)->capacity * 2; \
-        if (_new_capacity == 0) { \
-            _new_capacity = NAI_ARRAY_INIT_CAPACITY; \
-        } \
-        void *_new_data = nai_global_arena_alloc(_new_capacity * size); \
-        memcpy(_new_data, (array)->items, (array)->count * size); \
-        (array)->items = _new_data; \
-        (array)->capacity = _new_capacity; \
-    } \
-    memcpy((array)->items + (array)->count++ * size, (__VA_ARGS__), size); \
-} while (0)
-
 
 #define nai_array_foreach(type, x, array) for (type *x = (array)->items; x != (array)->items + (array)->count; ++x)
-
-
-
-typedef enum {
-    NAI_TT_INVALID = 0,
-    NAI_TT_ID = 256,
-    NAI_TT_INTEGER,
-    NAI_TT_STRING,
-    NAI_TT_CHARACTER,
-    NAI_TT_INCLUDE_STRING,
-    NAI_TT_PREPROC,
-    NAI_TT_BITWISE_AND,
-    NAI_TT_BITWISE_OR,
-    NAI_TT_LESS_EQUAL,
-    NAI_TT_GREATER_EQUAL,
-    NAI_TT_DOUBLE_EQUAL,
-    NAI_TT_NOT_EQUAL,
-    NAI_TT_ARROW,
-    NAI_TT_COMMENT,
-} Nai_Token_Type;
-
-
-
-static const char *const nai_tt_debug_names[];
-
-
-
-typedef struct {
-    Nai_Token_Type type;
-    Nai_String_View value;
-    size_t position;
-} Nai_Token;
-
-
-
-typedef Nai_Array(Nai_Token) Nai_Tokens;
-
-
-typedef struct {
-    const char *file_name;
-    Nai_String_View content;
-    size_t position;
-    size_t start;
-
-    Nai_Tokens tokens;
-} Nai_Lexer;
-
-
-
-Nai_Lexer nai_lex(const char *file_name, Nai_String_View content);
-Nai_Lexer nai_lex_file(const char *file_name);
-
-
-bool nai_read_file(const char *file_path, Nai_String_Builder *output);
-bool nai_write_file(const char *file_path, Nai_String_Builder content);
-
-
-
-typedef Nai_Array(const char *) Nai_Cmd;
-
-void nai_cmd_append_(Nai_Cmd *cmd, ...);
-#define nai_cmd_append(cmd, ...) nai_cmd_append_((cmd), __VA_ARGS__, NULL)
-void nai_cmd_run(Nai_Cmd cmd);
-
-
-
-char *nai_arg_shift(int *argc, char ***argv);
-
-
-
-typedef struct {
-    Nai_Tokens tokens;
-    size_t index;
-    Nai_String_View content;
-    Nai_Token_Type expected_type;
-    Nai_String_View expected_value;
-    Nai_String_View got_value;
-} Nai_Token_Stream;
-
-
-typedef Nai_Array(void *) Nai_Generic_Array;
-
-
-bool nai_ts_expect_id(Nai_Token_Stream *stream, const char *id);
-bool nai_ts_expect_type(Nai_Token_Stream *stream, Nai_Token_Type type);
-Nai_Token nai_ts_tok(Nai_Token_Stream *stream);
-Nai_Token_Stream nai_lexer_to_ts(Nai_Lexer lexer);
-const char *nai_ts_get_error(Nai_Token_Stream stream);
-Nai_Generic_Array nai_ts_match_(Nai_Token_Stream stream, bool (*transform)(Nai_Token_Stream *, void *), size_t);
-
-#define nai_ts_match(type, stream, func) (sizeof(func(&(Nai_Token_Stream){0}, (type){0}.items)), \
-        ((union { Nai_Generic_Array from; type to; }){ .from = nai_ts_match_(stream, (void *)func, sizeof(((type){0}).items[0])) }).to)
 
 
 void nai_recompile_metaprogram(int argc, char **argv, const char *file_name);
 void nai_rebuild_metaprogram_if_needed(int argc, char **argv, const char *file_name);
 
 
+typedef Nai_Array(const char *) Nai_Cmd;
+
+void nai_cmd_append_(Nai_Cmd *cmd, ...);
+#define nai_cmd_append(cmd, ...) nai_cmd_append_(cmd, __VA_ARGS__, 0)
+
+Nai_String_Builder nai_cmd_render(Nai_Cmd cmd);
+
+typedef struct {
+    Nai_Cmd cmd;
+    bool debug;
+} Nai_Cmd_Run_Params_;
+
+int nai_cmd_run_(Nai_Cmd_Run_Params_ ps);
+#define nai_cmd_run(...) nai_cmd_run_((Nai_Cmd_Run_Params_){__VA_ARGS__})
+
+
 #define NAI_REBUILD(argc, argv) nai_rebuild_metaprogram_if_needed(argc, argv, __FILE__)
 
 
-
-
+Nai_String_Builder nai_read_line(void);
+const char *sprint_number(double f);
 
 #ifndef NAI_HEADER_ONLY
 
@@ -298,7 +220,7 @@ void nai_sb_print_null(Nai_String_Builder *sb)
 
 // TODO: currently only for gnu/clang
 __attribute__((format(printf, 1, 2)))
-const char * nai_temp_sprintf(const char *fmt, ...)
+const char *nai_temp_sprintf(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -367,6 +289,19 @@ Nai_String_View nai_sv_chop_space(Nai_String_View *sv)
     return *sv;
 }
 
+Nai_String_View nai_sv_trim(Nai_String_View sv)
+{
+    while (isspace(*sv.data)) {
+        ++sv.data;
+        --sv.count;
+    }
+
+    while (isspace(sv.data[sv.count - 1])) {
+        --sv.count;
+    }
+
+    return sv;
+}
 
 Nai_String_View nai_sv_chop(Nai_String_View *sv, char delim)
 {
@@ -381,6 +316,31 @@ Nai_String_View nai_sv_chop(Nai_String_View *sv, char delim)
 
             ++sv->data;
             --sv->count;
+
+            return chopped;
+        }
+
+        ++sv->data;
+        --sv->count;
+    }
+
+    return *sv;
+}
+
+Nai_String_View nai_sv_split(Nai_String_View *sv, const char *delim)
+{
+    const char *data = sv->data;
+    size_t len = strlen(delim);
+    
+    while (sv->count) {
+        if (!strncmp(sv->data, delim, len)) {
+            Nai_String_View chopped = {
+                .data = data,
+                .count = sv->data - data,
+            };
+
+            sv->data += len;
+            sv->count -= len;
 
             return chopped;
         }
@@ -416,273 +376,6 @@ Nai_String_View nai_sv_from_cstr(const char *cstr)
     };
 }
 
-
-
-static const char *const nai_tt_debug_names[] = {
-    [NAI_TT_ID] = "IDENTIFIER",
-    [NAI_TT_INTEGER] = "INTEGER",
-    [NAI_TT_STRING] = "STRING",
-    [NAI_TT_CHARACTER] = "CHARACTER",
-    [NAI_TT_INCLUDE_STRING] = "INCLUDE_STRING",
-    [NAI_TT_PREPROC] = "PREPROC",
-    [NAI_TT_BITWISE_AND] = "&&",
-    [NAI_TT_BITWISE_OR] = "||",
-    [NAI_TT_LESS_EQUAL] = "<=",
-    [NAI_TT_GREATER_EQUAL] = ">=",
-    [NAI_TT_DOUBLE_EQUAL] = "==",
-    [NAI_TT_NOT_EQUAL] = "!=",
-    [NAI_TT_ARROW] = "->",
-    [NAI_TT_COMMENT] = "COMMENT",
-};
-
-
-bool nai_token_is_id(Nai_Token token, const char *id)
-{
-    return token.type == NAI_TT_ID && !strncmp(token.value.data, id, strlen(id));
-}
-
-
-
-
-Nai_String_Builder nai_tokens_render(Nai_Tokens tokens)
-{
-    Nai_String_Builder rendered = {0};
-
-    for (size_t i = 0; i < tokens.count; ++i) {
-        if (i > 0) nai_sb_printf(&rendered, " ");
-        nai_sb_printf(&rendered, NAI_SV_FMT, NAI_SV_ARG(tokens.items[i].value));
-    }
-
-    return rendered;
-}
-
-
-char nai_lexer_ch(Nai_Lexer *lexer)
-{
-    if (lexer->position >= lexer->content.count) {
-        return 0;
-    }
-
-    return lexer->content.data[lexer->position];
-}
-
-
-void nai_lexer_trim(Nai_Lexer *lexer)
-{
-    while (isspace(nai_lexer_ch(lexer))) {
-        ++lexer->position;
-    }
-}
-
-
-void nai_lexer_append(Nai_Lexer *lexer, Nai_Token_Type type)
-{
-    nai_array_append(&lexer->tokens, (Nai_Token) {
-        .type = type,
-        .value = {
-            .data = lexer->content.data + lexer->start,
-            .count = lexer->position - lexer->start,
-        },
-        .position = lexer->start,
-    });
-}
-
-void nai_lex_id(Nai_Lexer *lexer)
-{
-    ++lexer->position;
-
-    while (isalnum(nai_lexer_ch(lexer)) || nai_lexer_ch(lexer) == '_') {
-        ++lexer->position;
-    }
-
-    nai_lexer_append(lexer, NAI_TT_ID);
-}
-
-void nai_lex_preproc(Nai_Lexer *lexer)
-{
-    ++lexer->position;
-
-    if (isalpha(nai_lexer_ch(lexer)) || nai_lexer_ch(lexer) == '_') {
-        ++lexer->position;
-
-        while (isalnum(nai_lexer_ch(lexer)) || nai_lexer_ch(lexer) == '_') {
-            ++lexer->position;
-        }
-
-        nai_lexer_append(lexer, NAI_TT_PREPROC);
-    } else {
-        nai_lexer_append(lexer, NAI_TT_INVALID);
-    }
-}
-
-void nai_lex_integer(Nai_Lexer *lexer)
-{
-    ++lexer->position;
-
-    while (isdigit(nai_lexer_ch(lexer))) {
-        ++lexer->position;
-    }
-
-    nai_lexer_append(lexer, NAI_TT_INTEGER);
-}
-
-
-void nai_lex_string(Nai_Lexer *lexer) {
-    ++lexer->position;
-
-    while (nai_lexer_ch(lexer) && nai_lexer_ch(lexer) != '"') {
-        if (nai_lexer_ch(lexer) == '\\') {
-            ++lexer->position;
-        }
-
-        ++lexer->position;
-    }
-
-    if (!nai_lexer_ch(lexer)) {
-        nai_lexer_append(lexer, NAI_TT_INVALID); // TODO: add info that this is unterminated string
-    } else {
-        ++lexer->position;
-        nai_lexer_append(lexer, NAI_TT_STRING);
-    }
-}
-
-void nai_lex_include_string(Nai_Lexer *lexer) {
-    ++lexer->position;
-
-    while (nai_lexer_ch(lexer) && nai_lexer_ch(lexer) != '>') {
-        if (nai_lexer_ch(lexer) == '\\') {
-            ++lexer->position;
-        }
-
-        ++lexer->position;
-    }
-
-    if (!nai_lexer_ch(lexer)) {
-        nai_lexer_append(lexer, NAI_TT_INVALID); // TODO: add info that this is unterminated string
-    } else {
-        ++lexer->position;
-        nai_lexer_append(lexer, NAI_TT_INCLUDE_STRING);
-    }
-}
-
-void nai_lex_character(Nai_Lexer *lexer)
-{
-    ++lexer->position;
-
-    if (nai_lexer_ch(lexer) == '\'') {
-        nai_lexer_append(lexer, NAI_TT_INVALID);
-        return;
-    }
-
-    if (nai_lexer_ch(lexer) == '\\') {
-        ++lexer->position;
-    } 
-    
-    ++lexer->position;
-
-    if (nai_lexer_ch(lexer) != '\'') {
-        nai_lexer_append(lexer, NAI_TT_INVALID);
-    } else {
-        ++lexer->position;
-        nai_lexer_append(lexer, NAI_TT_CHARACTER);
-    }
-}
-
-void nai_lex_comment(Nai_Lexer *lexer)
-{
-    lexer->position += 2;
-
-    while (nai_lexer_ch(lexer) && nai_lexer_ch(lexer) != '\n') {
-        ++lexer->position;
-    }
-
-    nai_lexer_append(lexer, NAI_TT_COMMENT);
-}
-
-
-
-Nai_Lexer nai_lex(const char *file_name, Nai_String_View content)
-{
-    Nai_Lexer lexer = {0};
-    lexer.content = content;
-    lexer.file_name = file_name;
-
-    while (nai_lexer_ch(&lexer)) {
-        nai_lexer_trim(&lexer);
-
-        if (!nai_lexer_ch(&lexer)) break;
-            
-        lexer.start = lexer.position;
-
-        if (nai_lexer_ch(&lexer) == '#') {
-            nai_lex_preproc(&lexer);
-        } else if (isalpha(nai_lexer_ch(&lexer)) || nai_lexer_ch(&lexer) == '_') {
-            nai_lex_id(&lexer);
-        } else if (isdigit(nai_lexer_ch(&lexer))) {
-            nai_lex_integer(&lexer);
-        } else if (nai_lexer_ch(&lexer) == '"') {
-            nai_lex_string(&lexer);
-        } else if (nai_lexer_ch(&lexer) == '<' &&
-                lexer.position > 0 &&
-                nai_sv_equals(lexer.tokens.items[lexer.position - 1].value, "#include"))
-        {
-            nai_lex_include_string(&lexer);
-        } else if (nai_lexer_ch(&lexer) == '\'') {
-            nai_lex_character(&lexer);
-        } else if (!strncmp(&content.data[lexer.position], "&&", 2)) {
-            lexer.position += 2;
-            nai_lexer_append(&lexer, NAI_TT_BITWISE_AND);
-        } else if (!strncmp(&content.data[lexer.position], "||", 2)) {
-            lexer.position += 2;
-            nai_lexer_append(&lexer, NAI_TT_BITWISE_OR);
-        } else if (!strncmp(&content.data[lexer.position], "<=", 2)) {
-            lexer.position += 2;
-            nai_lexer_append(&lexer, NAI_TT_LESS_EQUAL);
-        } else if (!strncmp(&content.data[lexer.position], ">=", 2)) {
-            lexer.position += 2;
-            nai_lexer_append(&lexer, NAI_TT_GREATER_EQUAL);
-        } else if (!strncmp(&content.data[lexer.position], "==", 2)) {
-            lexer.position += 2;
-            nai_lexer_append(&lexer, NAI_TT_DOUBLE_EQUAL);
-        } else if (!strncmp(&content.data[lexer.position], "!=", 2)) {
-            lexer.position += 2;
-            nai_lexer_append(&lexer, NAI_TT_NOT_EQUAL);
-        } else if (!strncmp(&content.data[lexer.position], "->", 2)) {
-            lexer.position += 2;
-            nai_lexer_append(&lexer, NAI_TT_ARROW);
-        } else if (!strncmp(&content.data[lexer.position], "//", 2)) {
-            nai_lex_comment(&lexer);
-        } else if (nai_lexer_ch(&lexer) == '(' ||
-               nai_lexer_ch(&lexer) == ')' ||
-               nai_lexer_ch(&lexer) == '{' ||
-               nai_lexer_ch(&lexer) == '}' ||
-               nai_lexer_ch(&lexer) == '[' ||
-               nai_lexer_ch(&lexer) == ']' ||
-               nai_lexer_ch(&lexer) == ';' ||
-               nai_lexer_ch(&lexer) == '*' ||
-               nai_lexer_ch(&lexer) == '=' ||
-               nai_lexer_ch(&lexer) == '.' ||
-               nai_lexer_ch(&lexer) == ',' ||
-               nai_lexer_ch(&lexer) == '-' ||
-               nai_lexer_ch(&lexer) == '+' ||
-               nai_lexer_ch(&lexer) == '!' ||
-               nai_lexer_ch(&lexer) == '<' ||
-               nai_lexer_ch(&lexer) == '>' ||
-               nai_lexer_ch(&lexer) == '&' ||
-               nai_lexer_ch(&lexer) == '/' ||
-               nai_lexer_ch(&lexer) == '\\' ||
-               nai_lexer_ch(&lexer) == '|')
-        {
-            ++lexer.position;
-            nai_lexer_append(&lexer, content.data[lexer.position - 1]);
-        } else {
-            ++lexer.position;
-            nai_lexer_append(&lexer, 0);
-        }
-    }
-
-    return lexer;
-}
 
 
 
@@ -721,49 +414,10 @@ bool nai_write_file(const char *file_path, Nai_String_Builder content)
 }
 
 
-Nai_Lexer nai_lex_file(const char *file_name)
-{
-    Nai_String_Builder content = {0};
-
-    nai_read_file(file_name, &content);
-    return nai_lex(file_name, nai_sb_to_sv(content));
-}
-
-
-void nai_cmd_append_(Nai_Cmd *cmd, ...)
-{
-    va_list args;
-    va_start(args, cmd);
-
-    const char *arg;
-    while ((arg = va_arg(args, const char *))) {
-        nai_array_append(cmd, arg);
-    }
-
-    va_end(args);
-}
-
-
-void nai_cmd_run(Nai_Cmd cmd)
-{
-    Nai_String_Builder builder = {0};
-
-    for (size_t i = 0; i < cmd.count; ++i) {
-        nai_sb_printf(&builder, "%s ", cmd.items[i]);
-    }
-
-    nai_sb_print_null(&builder);
-    system(builder.data);
-}
-
-
 void nai_recompile_metaprogram(int argc, char **argv, const char *file_name)
 {
 
-    Nai_Cmd cmd = {0};
-
-    nai_cmd_append(&cmd, "cc", file_name, "-o", argv[0]);
-    nai_cmd_run(cmd);
+    system(nai_temp_sprintf("cc %s -o %s " NAI_FLAGS, file_name, argv[0]));
 
     FILE *metaprogram = fopen(".nai", "w+");
     assert(metaprogram);
@@ -813,96 +467,81 @@ char *nai_arg_shift(int *argc, char ***argv)
 }
 
 
-bool nai_ts_expect_id(Nai_Token_Stream *stream, const char *id)
+void nai_cmd_append_(Nai_Cmd *cmd, ...)
 {
-    Nai_Token token = stream->tokens.items[stream->index];
+    va_list args;
+    va_start(args, cmd);
+
+    const char *arg;
+    while ((arg = va_arg(args, const char *))) {
+        nai_array_append(cmd, arg);
+    }
+
+    va_end(args);
+}
+
+Nai_String_Builder nai_cmd_render(Nai_Cmd cmd)
+{
+    Nai_String_Builder sb = {0};
     
-    if (token.type == NAI_TT_ID &&
-        !strncmp(token.value.data, id, strlen(id))) {
-        ++stream->index;
-        return true;
-    } else {
-        stream->expected_type = NAI_TT_ID;
-        stream->expected_value = nai_sv_from_cstr(id);
-        stream->got_value = token.value;
-        return false;
-    }
-}
-
-bool nai_ts_expect_type(Nai_Token_Stream *stream, Nai_Token_Type type)
-{
-    Nai_Token token = stream->tokens.items[stream->index];
-
-    if (token.type == type) {
-        ++stream->index;
-        return true;
-    } else {
-        stream->expected_type = type;
-        stream->got_value = token.value;
-        return false;
-    }
-}
-
-Nai_Token nai_ts_tok(Nai_Token_Stream *stream)
-{
-    if (stream->index < stream->tokens.count) {
-        return stream->tokens.items[stream->index];
-    } else {
-        return (Nai_Token) {0};
-    }
-}
-
-Nai_Token_Stream nai_lexer_to_ts(Nai_Lexer lexer)
-{
-    return (Nai_Token_Stream) {
-        .tokens = lexer.tokens,
-        .content = lexer.content,
-    };
-}
-
-const char *nai_ts_get_error(Nai_Token_Stream stream)
-{
-    Nai_String_Builder message = {0};
-
-    nai_sb_printf(&message, "ERROR: ");
-
-    if (stream.expected_value.data) {
-        nai_sb_printf(&message, "Expected '"NAI_SV_FMT"', but got '"NAI_SV_FMT"' instead\n", NAI_SV_ARG(stream.expected_value), NAI_SV_ARG(stream.got_value));
-    } else {
-        if (stream.expected_type <= 255) {
-            nai_sb_printf(&message, "Expected '%c', but got '"NAI_SV_FMT"' instead\n", stream.expected_type, NAI_SV_ARG(stream.got_value));
-        } else {
-            nai_sb_printf(&message, "Expected '%s', but got '"NAI_SV_FMT"' instead\n", nai_tt_debug_names[stream.expected_type], NAI_SV_ARG(stream.got_value));
-        }
+    nai_array_foreach(const char *, arg, &cmd) {
+        nai_sb_printf(&sb, "%s ", *arg);
     }
 
-    nai_sb_print_null(&message);
-
-    return message.data;
+    return sb;
 }
 
-
-
-
-Nai_Generic_Array nai_ts_match_(Nai_Token_Stream stream, bool (*transform)(Nai_Token_Stream *, void *), size_t size)
+int nai_cmd_run_(Nai_Cmd_Run_Params_ ps)
 {
-    Nai_Generic_Array results = {0};
-    void *value = nai_global_arena_alloc(size);
+    Nai_String_Builder sb = nai_cmd_render(ps.cmd);
 
-    while (stream.index < stream.tokens.count) {
-        Nai_Token_Stream copy = stream;
-
-        if (transform(&copy, value)) {
-            nai_array_append_void(&results, size, value);
-            value = nai_global_arena_alloc(size);
-        }
-
-        ++stream.index;
+    if (ps.debug) {
+        nai_log_info("\x1b[2m+ "NAI_SV_FMT"\x1b[0m", NAI_SV_ARG(sb));
     }
 
-    return results;
+    nai_sb_print_null(&sb);
+    return system(sb.data);
 }
 
+Nai_String_Builder nai_read_line(void)
+{
+    fflush(stdout);
+
+    char buffer[8 * 1024];
+    Nai_String_Builder sb = {0};
+
+    fgets(buffer, sizeof(buffer), stdin);
+
+    size_t len = strlen(buffer) - 1;
+    nai_sb_reserve(&sb, len);
+    memcpy(sb.data, buffer, len);
+    sb.count = len;
+
+    return sb;
+}
+
+
+#include <math.h>
+
+const char *nai_sprint_number(double f)
+{
+    const char *fmt;
+    double x = fabs(f);
+
+    if (fabs(round(x) - x) < 1e-2) fmt = "%.0lf";
+    else if (fabs(round(x*1e1)*1e-1 - x) < 1e-3) fmt = "%.1lf";
+    else if (fabs(round(x*1e2)*1e-2 - x) < 1e-4) fmt = "%.2lf";
+    else if (fabs(round(x*1e3)*1e-3 - x) < 1e-5) fmt = "%.3lf";
+    else if (fabs(round(x*1e4)*1e-4 - x) < 1e-6) fmt = "%.4lf";
+    else if (fabs(round(x*1e5)*1e-5 - x) < 1e-8) fmt = "%.5lf";
+    else if (fabs(round(x*1e6)*1e-6 - x) < 1e-9) fmt = "%.6lf";
+    else if (fabs(round(x*1e7)*1e-7 - x) < 1e-10) fmt = "%.7lf";
+    else if (fabs(round(x*1e8)*1e-8 - x) < 1e-11) fmt = "%.8lf";
+    else if (fabs(round(x*1e9)*1e-9 - x) < 1e-12) fmt = "%.9lf";
+    else fmt = "%.10lf";
+
+    return nai_temp_sprintf(fmt, f);
+}
 
 #endif // NAI_HEADER_ONLY
 
@@ -910,68 +549,47 @@ Nai_Generic_Array nai_ts_match_(Nai_Token_Stream stream, bool (*transform)(Nai_T
 #ifndef NAI_FORCE_PREFIX
 
 #define TODO NAI_TODO
+#define log_info nai_log_info
+#define log_help nai_log_help
+#define log_warning nai_log_warning
+#define log_error nai_log_error
 #define Arena Nai_Arena
 #define global_arena nai_global_arena
 #define init_global_arena nai_init_global_arena
 #define global_arena_alloc nai_global_arena_alloc
 #define String_Builder Nai_String_Builder
 #define sb_reserve nai_sb_reserve
-#define sb_printf nai_sb_printf
 #define temp_sprintf nai_temp_sprintf
+#define sb_printf nai_sb_printf
 #define sb_print_null nai_sb_print_null
+#define sb_print_many nai_sb_print_many
 #define String_View Nai_String_View
 #define SV_FMT NAI_SV_FMT
 #define SV_ARG NAI_SV_ARG
 #define sb_to_sv nai_sb_to_sv
 #define sv_to_sb nai_sv_to_sb
 #define sv_equals nai_sv_equals
+#define sv_trim nai_sv_trim
 #define sv_chop nai_sv_chop
+#define sv_split nai_sv_split
 #define sv_chop_space nai_sv_chop_space
 #define sv_chop_right nai_sv_chop_right
 #define sv_from_cstr nai_sv_from_cstr
 #define Array Nai_Array
 #define array_append nai_array_append
 #define array_foreach nai_array_foreach
-#define Token_Type Nai_Token_Type
-#define TT_INVALID NAI_TT_INVALID
-#define TT_ID NAI_TT_ID
-#define TT_INTEGER NAI_TT_INTEGER
-#define TT_STRING NAI_TT_STRING
-#define TT_CHARACTER NAI_TT_CHARACTER
-#define TT_INCLUDE_STRING NAI_TT_INCLUDE_STRING
-#define TT_PREPROC NAI_TT_PREPROC
-#define TT_BITWISE_AND NAI_TT_BITWISE_AND
-#define TT_BITWISE_OR NAI_TT_BITWISE_OR
-#define TT_LESS_EQUAL NAI_TT_LESS_EQUAL
-#define TT_GREATER_EQUAL NAI_TT_GREATER_EQUAL
-#define TT_DOUBLE_EQUAL NAI_TT_DOUBLE_EQUAL
-#define TT_NOT_EQUAL NAI_TT_NOT_EQUAL
-#define TT_ARROW NAI_TT_ARROW
-#define TT_COMMENT NAI_TT_COMMENT
-#define Token Nai_Token
-#define Tokens Nai_Tokens
-#define Lexer Nai_Lexer
-#define lex_file nai_lex_file
 #define read_file nai_read_file
 #define write_file nai_write_file
+#define arg_shift nai_arg_shift
 #define Cmd Nai_Cmd
 #define cmd_append nai_cmd_append
-#define cmd_cc nai_cmd_cc
-#define cmd_cflags nai_cmd_cflags
+#define cmd_render nai_cmd_render
 #define cmd_run nai_cmd_run
-#define arg_shift nai_arg_shift
-#define Token_Stream Nai_Token_Stream
-#define ts_expect_id nai_ts_expect_id
-#define ts_expect_type nai_ts_expect_type
-#define ts_tok nai_ts_tok
-#define ts_get_error nai_ts_get_error
-#define ts_match nai_ts_match
-#define lexer_to_ts nai_lexer_to_ts
 #define REBUILD NAI_REBUILD
+#define read_line nai_read_line
+#define sprint_number nai_sprint_number
 
 #endif // NAI_FORCE_PREFIX
-
-
 
 
 

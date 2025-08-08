@@ -4,4 +4,5 @@
 
 #define TAG_OF(func) _##func##_tag
 
-#include "gen/defs.c"
+#include "generated/defs.c"
+
