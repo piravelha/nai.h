@@ -7,8 +7,8 @@ int main(int argc, char **argv)
 
     printf("Define a computation: ");
 
-    String_Builder input = read_line();
-    String_View computation = sb_to_sv(input);
+    String input = read_line();
+    String_View computation = str_to_sv(input);
 
     String_View param = sv_split(&computation, "=>");
 
@@ -21,13 +21,13 @@ int main(int argc, char **argv)
     param = sv_trim(param);
     computation = sv_trim(computation);
 
-    String_Builder out = {0};
-    sb_printf(&out, "float compute(float "SV_FMT")\n", SV_ARG(param));
-    sb_printf(&out, "{\n");
-    sb_printf(&out, "    return "SV_FMT";\n", SV_ARG(computation));
-    sb_printf(&out, "}\n");
+    String out = {0};
+    str_appendf(&out, "float compute(float "SV_FMT")\n", SV_ARG(param));
+    str_appendf(&out, "{\n");
+    str_appendf(&out, "    return "SV_FMT";\n", SV_ARG(computation));
+    str_appendf(&out, "}\n");
 
-    write_file("compute.c", out);
+    write_file("compute.c", str_to_sv(out));
 
     Cmd cmd = {0};
     cmd_append(&cmd, "cc", "main.c", "-o", "main", "-lm");

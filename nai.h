@@ -71,14 +71,18 @@ typedef struct {
     char *data;
     size_t count;
     size_t capacity;
-} Nai_String_Builder;
+} Nai_String;
 
-void nai_sb_reserve(Nai_String_Builder *sb, size_t size);
+void nai_str_reserve(Nai_String *str, size_t size);
+void nai_str_append(Nai_String *str, const char *s);
+void nai_str_appendn(Nai_String *str, const char *s, size_t len);
 __attribute__((format(printf, 2, 3)))
-void nai_sb_printf(Nai_String_Builder *sb, const char *fmt, ...);
+void nai_str_appendf(Nai_String *str, const char *fmt, ...);
 __attribute__((format(printf, 1, 2)))
 const char *nai_temp_sprintf(const char *fmt, ...);
-void nai_sb_print_null(Nai_String_Builder *sb);
+void nai_str_append_null(Nai_String *str);
+
+char *nai_str_to_cstr(Nai_String str);
 
 typedef struct {
     const char *data;
@@ -88,8 +92,8 @@ typedef struct {
 #define NAI_SV_FMT "%.*s"
 #define NAI_SV_ARG(sv) (int) (sv).count, (sv).data
 
-Nai_String_View nai_sb_to_sv(Nai_String_Builder sb);
-Nai_String_Builder nai_sv_to_sb(Nai_String_View sv);
+Nai_String_View nai_str_to_sv(Nai_String str);
+Nai_String nai_sv_to_str(Nai_String_View sv);
 bool nai_sv_equals(Nai_String_View sv, const char *cstr);
 Nai_String_View nai_sv_chop_space(Nai_String_View *sv);
 Nai_String_View nai_sv_chop(Nai_String_View *sv, char delim);
@@ -137,7 +141,7 @@ typedef Nai_Array(const char *) Nai_Cmd;
 void nai_cmd_append_(Nai_Cmd *cmd, ...);
 #define nai_cmd_append(cmd, ...) nai_cmd_append_(cmd, __VA_ARGS__, 0)
 
-Nai_String_Builder nai_cmd_render(Nai_Cmd cmd);
+Nai_String nai_cmd_render(Nai_Cmd cmd);
 
 typedef struct {
     Nai_Cmd cmd;
@@ -151,7 +155,7 @@ int nai_cmd_run_(Nai_Cmd_Run_Params_ ps);
 #define NAI_REBUILD(argc, argv) nai_rebuild_metaprogram_if_needed(argc, argv, __FILE__)
 
 
-Nai_String_Builder nai_read_line(void);
+Nai_String nai_read_line(void);
 const char *sprint_number(double f);
 
 #ifndef NAI_HEADER_ONLY
@@ -181,42 +185,62 @@ void *nai_global_arena_alloc(size_t alloc_size)
 }
 
 
-void nai_sb_reserve(Nai_String_Builder *sb, size_t size)
+void nai_str_reserve(Nai_String *str, size_t size)
 {
-    if (size > sb->capacity) {
+    if (size > str->capacity) {
         size_t new_capacity = size * 2;
         char *new_data = nai_global_arena_alloc(new_capacity);
-        memcpy(new_data, sb->data, sb->count);
+        memcpy(new_data, str->data, str->count);
 
-        sb->data = new_data;
-        sb->capacity = new_capacity;
+        str->data = new_data;
+        str->capacity = new_capacity;
     }
 }
+
+void nai_str_append(Nai_String *str, const char *s)
+{
+    size_t len = strlen(s);
+    nai_str_reserve(str, str->count + len);
+    memcpy(str->data + str->count, s, len);
+}
+
+void nai_str_appendn(Nai_String *str, const char *s, size_t len)
+{
+    nai_str_reserve(str, str->count + len);
+    memcpy(str->data + str->count, s, len);
+}
+
 
 
 // TODO: currently only for gnu/clang
 __attribute__((format(printf, 2, 3)))
-void nai_sb_printf(Nai_String_Builder *sb, const char *fmt, ...)
+void nai_str_appendf(Nai_String *str, const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
 
     size_t formatted_length = vsnprintf(NULL, 0, fmt, args);
-    nai_sb_reserve(sb, sb->count + formatted_length);
+    nai_str_reserve(str, str->count + formatted_length);
 
-    vsprintf(sb->data + sb->count, fmt, args);
-    sb->count += formatted_length;
+    vsprintf(str->data + str->count, fmt, args);
+    str->count += formatted_length;
     
     va_end(args);
 }
 
-void nai_sb_print_null(Nai_String_Builder *sb)
+void nai_str_append_null(Nai_String *str)
 {
-    nai_sb_reserve(sb, sb->count + 1);
-    sb->data[sb->count++] = 0;
+    nai_str_reserve(str, str->count + 1);
+    str->data[str->count++] = 0;
 }
 
-
+char *nai_str_to_cstr(Nai_String str)
+{
+    Nai_String copy = {0};
+    nai_str_appendn(&copy, str.data, str.count);
+    nai_str_append_null(&copy);
+    return copy.data;
+}
 
 // TODO: currently only for gnu/clang
 __attribute__((format(printf, 1, 2)))
@@ -227,21 +251,21 @@ const char *nai_temp_sprintf(const char *fmt, ...)
 
     size_t formatted_length = vsnprintf(NULL, 0, fmt, args);
 
-    Nai_String_Builder sb = {0};
-    nai_sb_reserve(&sb, formatted_length);
+    Nai_String str = {0};
+    nai_str_reserve(&str, formatted_length);
 
-    vsprintf(sb.data, fmt, args);
-    sb.count = formatted_length;
+    vsprintf(str.data, fmt, args);
+    str.count = formatted_length;
 
-    nai_sb_print_null(&sb);
+    nai_str_append_null(&str);
     
     va_end(args);
 
-    return sb.data;
+    return str.data;
 }
 
 
-Nai_String_View nai_sb_to_sv(Nai_String_Builder sb)
+Nai_String_View nai_str_to_sv(Nai_String sb)
 {
     return (Nai_String_View) {
         .data = sb.data,
@@ -250,10 +274,10 @@ Nai_String_View nai_sb_to_sv(Nai_String_Builder sb)
 }
 
 
-Nai_String_Builder nai_sv_to_sb(Nai_String_View sv)
+Nai_String nai_sv_to_str(Nai_String_View sv)
 {
-    Nai_String_Builder sb = {0};
-    nai_sb_printf(&sb, NAI_SV_FMT, NAI_SV_ARG(sv));
+    Nai_String sb = {0};
+    nai_str_appendf(&sb, NAI_SV_FMT, NAI_SV_ARG(sv));
 
     return sb;
 }
@@ -379,7 +403,7 @@ Nai_String_View nai_sv_from_cstr(const char *cstr)
 
 
 
-bool nai_read_file(const char *file_path, Nai_String_Builder *output)
+bool nai_read_file(const char *file_path, Nai_String *output)
 {
     FILE *file = fopen(file_path, "rb");
     if (!file) return false;
@@ -390,7 +414,7 @@ bool nai_read_file(const char *file_path, Nai_String_Builder *output)
 
     rewind(file);
 
-    nai_sb_reserve(output, output->count + file_size);
+    nai_str_reserve(output, output->count + file_size);
 
     fread(output->data + output->count, 1, file_size, file);
 
@@ -401,11 +425,11 @@ bool nai_read_file(const char *file_path, Nai_String_Builder *output)
     return true;
 }
 
-bool nai_read_file_sv(Nai_String_View path, Nai_String_Builder *out)
+bool nai_read_file_sv(Nai_String_View path, Nai_String *out)
 {
-    Nai_String_Builder sb = {0};
-    nai_sb_printf(&sb, NAI_SV_FMT, NAI_SV_ARG(path));
-    nai_sb_print_null(&sb);
+    Nai_String sb = {0};
+    nai_str_appendf(&sb, NAI_SV_FMT, NAI_SV_ARG(path));
+    nai_str_append_null(&sb);
 
     return nai_read_file(sb.data, out);
 }
@@ -431,16 +455,16 @@ void nai_recompile_metaprogram(int argc, char **argv, const char *file_name)
     FILE *metaprogram = fopen(".nai", "w+");
     assert(metaprogram);
 
-    Nai_String_Builder new_content = {0};
+    Nai_String new_content = {0};
     assert(nai_read_file(file_name, &new_content));
     fwrite(new_content.data, 1, new_content.count, metaprogram);
 
     fclose(metaprogram);
 
-    Nai_String_Builder run = {0};
+    Nai_String run = {0};
     
     for (size_t i = 0; i < argc; ++i) {
-        nai_sb_printf(&run, " %s", argv[i]);
+        nai_str_appendf(&run, " %s", argv[i]);
     }
     
     system(run.data);
@@ -451,16 +475,16 @@ void nai_recompile_metaprogram(int argc, char **argv, const char *file_name)
 
 void nai_rebuild_metaprogram_if_needed(int argc, char **argv, const char *file_name)
 {
-    Nai_String_Builder file_contents = {0};
+    Nai_String file_contents = {0};
     assert(nai_read_file(file_name, &file_contents));
 
-    nai_sb_print_null(&file_contents);
+    nai_str_append_null(&file_contents);
 
-    Nai_String_Builder metaprogram_contents = {0};
+    Nai_String metaprogram_contents = {0};
     if (!nai_read_file(".nai", &metaprogram_contents)) {
         nai_recompile_metaprogram(argc, argv, file_name);
     }
-    nai_sb_print_null(&metaprogram_contents);
+    nai_str_append_null(&metaprogram_contents);
 
     if (strcmp(file_contents.data, metaprogram_contents.data) != 0) {
         nai_recompile_metaprogram(argc, argv, file_name);
@@ -489,12 +513,12 @@ void nai_cmd_append_(Nai_Cmd *cmd, ...)
     va_end(args);
 }
 
-Nai_String_Builder nai_cmd_render(Nai_Cmd cmd)
+Nai_String nai_cmd_render(Nai_Cmd cmd)
 {
-    Nai_String_Builder sb = {0};
+    Nai_String sb = {0};
     
     nai_array_foreach(const char *, arg, &cmd) {
-        nai_sb_printf(&sb, "%s ", *arg);
+        nai_str_appendf(&sb, "%s ", *arg);
     }
 
     return sb;
@@ -502,27 +526,27 @@ Nai_String_Builder nai_cmd_render(Nai_Cmd cmd)
 
 int nai_cmd_run_(Nai_Cmd_Run_Params_ ps)
 {
-    Nai_String_Builder sb = nai_cmd_render(ps.cmd);
+    Nai_String sb = nai_cmd_render(ps.cmd);
 
     if (ps.debug) {
         nai_log_info("\x1b[2m+ "NAI_SV_FMT"\x1b[0m", NAI_SV_ARG(sb));
     }
 
-    nai_sb_print_null(&sb);
+    nai_str_append_null(&sb);
     return system(sb.data);
 }
 
-Nai_String_Builder nai_read_line(void)
+Nai_String nai_read_line(void)
 {
     fflush(stdout);
 
     char buffer[8 * 1024];
-    Nai_String_Builder sb = {0};
+    Nai_String sb = {0};
 
     fgets(buffer, sizeof(buffer), stdin);
 
     size_t len = strlen(buffer) - 1;
-    nai_sb_reserve(&sb, len);
+    nai_str_reserve(&sb, len);
     memcpy(sb.data, buffer, len);
     sb.count = len;
 
@@ -566,16 +590,18 @@ const char *nai_sprint_number(double f)
 #define global_arena nai_global_arena
 #define init_global_arena nai_init_global_arena
 #define global_arena_alloc nai_global_arena_alloc
-#define String_Builder Nai_String_Builder
-#define sb_reserve nai_sb_reserve
+#define String Nai_String
+#define str_reserve nai_str_reserve
 #define temp_sprintf nai_temp_sprintf
-#define sb_printf nai_sb_printf
-#define sb_print_null nai_sb_print_null
-#define sb_print_many nai_sb_print_many
+#define str_append nai_str_append
+#define str_appendn nai_str_append×+
+#define str_appendf nai_str_appendf
+#define str_append_null nai_str_append_null
+#define str_to_cstr nai_str_to_cstr
 #define String_View Nai_String_View
 #define SV_FMT NAI_SV_FMT
 #define SV_ARG NAI_SV_ARG
-#define sb_to_sv nai_sb_to_sv
+#define str_to_sv nai_str_to_sv
 #define sv_to_sb nai_sv_to_sb
 #define sv_equals nai_sv_equals
 #define sv_trim nai_sv_trim
@@ -585,6 +611,7 @@ const char *nai_sprint_number(double f)
 #define sv_chop_right nai_sv_chop_right
 #define sv_from_cstr nai_sv_from_cstr
 #define Array Nai_Array
+#define array_append nai_array_append
 #define array_append nai_array_append
 #define array_foreach nai_array_foreach
 #define read_file nai_read_file

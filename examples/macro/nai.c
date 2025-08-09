@@ -15,10 +15,10 @@ bool transform(Token_Stream *in, Token_Stream *out)
     path.data++;
     path.count -= 2;
 
-    String_Builder content = {0};
+    String content = {0};
     if (!read_file_sv(path, &content)) return false;
 
-    String_View trimmed = sv_trim(sb_to_sv(content));
+    String_View trimmed = sv_trim(str_to_sv(content));
 
     *out = ts_fmt("\""SV_FMT"\"", SV_ARG(trimmed));
     return true;

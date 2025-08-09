@@ -116,13 +116,13 @@ bool nai_token_is_id(Nai_Token token, const char *id)
 
 
 
-Nai_String_Builder nai_tokens_render(Nai_Tokens tokens)
+Nai_String nai_tokens_render(Nai_Tokens tokens)
 {
-    Nai_String_Builder rendered = {0};
+    Nai_String rendered = {0};
 
     for (size_t i = 0; i < tokens.count; ++i) {
-        if (i > 0) nai_sb_printf(&rendered, " ");
-        nai_sb_printf(&rendered, NAI_SV_FMT, NAI_SV_ARG(tokens.items[i].value));
+        if (i > 0) nai_str_append(&rendered, " ");
+        nai_str_appendf(&rendered, NAI_SV_FMT, NAI_SV_ARG(tokens.items[i].value));
     }
 
     return rendered;
@@ -360,10 +360,10 @@ Nai_Token_Stream nai_lex_sv(const char *file_name, Nai_String_View content)
 
 Nai_Token_Stream nai_lex_file(const char *file_name)
 {
-    Nai_String_Builder content = {0};
+    Nai_String content = {0};
 
     nai_read_file(file_name, &content);
-    return nai_lex_sv(file_name, nai_sb_to_sv(content));
+    return nai_lex_sv(file_name, nai_str_to_sv(content));
 }
 
 
@@ -433,21 +433,21 @@ Nai_Token_Stream nai_lexer_to_ts(Nai_Lexer lexer)
 
 const char *nai_ts_get_error(Nai_Token_Stream stream)
 {
-    Nai_String_Builder message = {0};
+    Nai_String message = {0};
 
-    nai_sb_printf(&message, "ERROR: ");
+    nai_str_append(&message, "ERROR: ");
 
     if (stream.expected_value.data) {
-        nai_sb_printf(&message, "Expected '"NAI_SV_FMT"', but got '"NAI_SV_FMT"' instead\n", NAI_SV_ARG(stream.expected_value), NAI_SV_ARG(stream.got_value));
+        nai_str_appendf(&message, "Expected '"NAI_SV_FMT"', but got '"NAI_SV_FMT"' instead\n", NAI_SV_ARG(stream.expected_value), NAI_SV_ARG(stream.got_value));
     } else {
         if (stream.expected_type <= 255) {
-            nai_sb_printf(&message, "Expected '%c', but got '"NAI_SV_FMT"' instead\n", stream.expected_type, NAI_SV_ARG(stream.got_value));
+            nai_str_appendf(&message, "Expected '%c', but got '"NAI_SV_FMT"' instead\n", stream.expected_type, NAI_SV_ARG(stream.got_value));
         } else {
-            nai_sb_printf(&message, "Expected '%s', but got '"NAI_SV_FMT"' instead\n", nai_tt_debug_names[stream.expected_type], NAI_SV_ARG(stream.got_value));
+            nai_str_appendf(&message, "Expected '%s', but got '"NAI_SV_FMT"' instead\n", nai_tt_debug_names[stream.expected_type], NAI_SV_ARG(stream.got_value));
         }
     }
 
-    nai_sb_print_null(&message);
+    nai_str_append_null(&message);
 
     return message.data;
 }
@@ -516,7 +516,7 @@ Nai_Generic_Array nai_ts_match_(Nai_Token_Stream stream, bool (*transform)(Nai_T
 
 Nai_Token_Stream nai_ts_replace(Nai_Token_Stream stream, bool (*transform)(Nai_Token_Stream *, Nai_Token_Stream *))
 {
-    Nai_String_Builder content = {0};
+    Nai_String content = {0};
     Nai_Token_Stream out = {0};
 
     size_t last_pos = 0;
@@ -531,14 +531,14 @@ Nai_Token_Stream nai_ts_replace(Nai_Token_Stream stream, bool (*transform)(Nai_T
             size_t pos = nai_ts_tok(&stream).position;
             size_t size = pos - last_pos;
 
-            nai_sb_reserve(&content, content.count + size);
+            nai_str_reserve(&content, content.count + size);
             memcpy(content.data + content.count, stream.content.data + last_pos, size);
             content.count += size;
 
             array_foreach(Nai_Token, tok, &result.tokens) {
                 tok->position = content.count;
 
-                nai_sb_printf(&content, NAI_SV_FMT" ", NAI_SV_ARG(tok->value));
+                nai_str_appendf(&content, NAI_SV_FMT" ", NAI_SV_ARG(tok->value));
                 nai_array_append(&out.tokens, *tok);
             }
 
@@ -552,7 +552,7 @@ Nai_Token_Stream nai_ts_replace(Nai_Token_Stream stream, bool (*transform)(Nai_T
             size_t pos = nai_ts_tok(&stream).position;
             size_t size = pos - last_pos;
 
-            nai_sb_reserve(&content, content.count + size);
+            nai_str_reserve(&content, content.count + size);
             memcpy(content.data + content.count, stream.content.data + last_pos, size);
             content.count += size;
 
@@ -568,12 +568,12 @@ Nai_Token_Stream nai_ts_replace(Nai_Token_Stream stream, bool (*transform)(Nai_T
 
     size_t size = stream.content.count - last_pos;
 
-    nai_sb_reserve(&content, content.count + size);
+    nai_str_reserve(&content, content.count + size);
     memcpy(content.data + content.count, stream.content.data + last_pos, size);
 
     content.count += size;
 
-    out.content = nai_sb_to_sv(content);
+    out.content = nai_str_to_sv(content);
     return out;
 }
 
