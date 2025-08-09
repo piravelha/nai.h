@@ -1,2 +1,0 @@
-#define VALUE 12
-#define RESULT 479001600
