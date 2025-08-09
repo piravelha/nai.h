@@ -69,12 +69,16 @@ Usage
 
 1. Compile nai.c once manually:
 
+```sh
 cc nai.c -o nai
+```
 
 
 2. Run nai to process and build the project:
 
+```sh
 ./nai
+```
 
 
 
