@@ -12,6 +12,7 @@ bool transform(Token_Stream *in, Token_Stream *out)
 
     if (!ts_expect_type(in, ')')) return false;
 
+    // trim double quotes from string literal
     path.data++;
     path.count -= 2;
 
