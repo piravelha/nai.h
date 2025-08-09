@@ -401,8 +401,17 @@ bool nai_read_file(const char *file_path, Nai_String_Builder *output)
     return true;
 }
 
+bool nai_read_file_sv(Nai_String_View path, Nai_String_Builder *out)
+{
+    Nai_String_Builder sb = {0};
+    nai_sb_printf(&sb, NAI_SV_FMT, NAI_SV_ARG(path));
+    nai_sb_print_null(&sb);
 
-bool nai_write_file(const char *file_path, Nai_String_Builder content)
+    return nai_read_file(sb.data, out);
+}
+
+
+bool nai_write_file(const char *file_path, Nai_String_View content)
 {
     FILE *file = fopen(file_path, "w+");
     if (!file) return false;
@@ -579,6 +588,7 @@ const char *nai_sprint_number(double f)
 #define array_append nai_array_append
 #define array_foreach nai_array_foreach
 #define read_file nai_read_file
+#define read_file_sv nai_read_file_sv
 #define write_file nai_write_file
 #define arg_shift nai_arg_shift
 #define Cmd Nai_Cmd
