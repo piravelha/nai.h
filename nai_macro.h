@@ -1,3 +1,27 @@
+/* MIT License
+
+Copyright (c) 2025 piraloco
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
+
+
 #ifndef NAI_MACRO_H
 #define NAI_MACRO_H
 
@@ -70,10 +94,12 @@ typedef Nai_Array(void) Nai_Generic_Array;
 bool nai_ts_expect_id(Nai_Token_Stream *stream, const char *id);
 bool nai_ts_expect_value(Nai_Token_Stream *stream, const char *value);
 bool nai_ts_expect_type(Nai_Token_Stream *stream, Nai_Token_Type type);
+bool nai_ts_consume_until(Nai_Token_Stream *stream, Nai_Token_Type value);
 Nai_Token nai_ts_tok(Nai_Token_Stream *stream);
 Nai_Token_Stream nai_lexer_to_ts(Nai_Lexer lexer);
 bool  nai_ts_balanced(Nai_Token_Stream *stream, Nai_Token_Stream *result, const char *left, const char *right);
 const char *nai_ts_get_error(Nai_Token_Stream stream);
+bool nai_ts_valid(Nai_Token_Stream *);
 
 Nai_Generic_Array nai_ts_match_(Nai_Token_Stream stream, bool (*transform)(Nai_Token_Stream *, void *), size_t);
 
@@ -81,6 +107,8 @@ Nai_Token_Stream nai_ts_replace(Nai_Token_Stream stream, bool (*transform)(Nai_T
 
 #define nai_ts_match(type, stream, func) (sizeof(func(&(Nai_Token_Stream){0}, (type){0}.items)), \
         ((union { Nai_Generic_Array from; type to; }){ .from = nai_ts_match_(stream, (void *)func, sizeof(((type){0}).items[0])) }).to)
+
+Nai_String nai_ts_render(Nai_Token_Stream *ts);
 
 #define nai_ts_fmt(fmt, ...) nai_lex_sv("<temp>", nai_sv_from_cstr(nai_temp_sprintf(fmt, ##__VA_ARGS__)))
 #define nai_ts_stringify(...) nai_lex_sv("<temp>", nai_sv_from_cstr(#__VA_ARGS__))
@@ -128,6 +156,16 @@ Nai_String nai_tokens_render(Nai_Tokens tokens)
     return rendered;
 }
 
+Nai_String nai_ts_render(Nai_Token_Stream *ts)
+{
+    Nai_String rendered = {0};
+
+    for (size_t i = ts->index; i < ts->tokens.count; ++i) {
+        nai_str_appendf(&rendered, NAI_SV_FMT" ", NAI_SV_ARG(ts->tokens.items[i].value));
+    }
+
+    return rendered;
+}
 
 char nai_lexer_ch(Nai_Lexer *lexer)
 {
@@ -369,6 +407,7 @@ Nai_Token_Stream nai_lex_file(const char *file_name)
 
 bool nai_ts_expect_id(Nai_Token_Stream *stream, const char *id)
 {
+    if (!nai_ts_valid(stream)) return false;
     Nai_Token token = stream->tokens.items[stream->index];
     if (!token.value.data) return false;
     
@@ -386,6 +425,7 @@ bool nai_ts_expect_id(Nai_Token_Stream *stream, const char *id)
 
 bool nai_ts_expect_value(Nai_Token_Stream *stream, const char *value)
 {
+    if (!nai_ts_valid(stream)) return false;
     Nai_Token token = stream->tokens.items[stream->index];
     if (!token.value.data) return false;
     
@@ -402,6 +442,7 @@ bool nai_ts_expect_value(Nai_Token_Stream *stream, const char *value)
 
 bool nai_ts_expect_type(Nai_Token_Stream *stream, Nai_Token_Type type)
 {
+    if (!nai_ts_valid(stream)) return false;
     Nai_Token token = stream->tokens.items[stream->index];
 
     if (token.type == type) {
@@ -469,20 +510,19 @@ bool nai_ts_balanced(Nai_Token_Stream *stream, Nai_Token_Stream *result, const c
             ++count;
             nai_array_append(&result->tokens, tok);
 
-            if (!count) break;
             continue;
         }
 
         if (nai_ts_expect_value(stream, right)) {
             --count;
-            nai_array_append(&result->tokens, tok);
 
             if (!count) break;
+            nai_array_append(&result->tokens, tok);
+
             continue;
         }
 
         if (!count) break;
-
 
         nai_array_append(&result->tokens, tok);
         ++stream->index;
@@ -535,7 +575,7 @@ Nai_Token_Stream nai_ts_replace(Nai_Token_Stream stream, bool (*transform)(Nai_T
             memcpy(content.data + content.count, stream.content.data + last_pos, size);
             content.count += size;
 
-            array_foreach(Nai_Token, tok, &result.tokens) {
+           nai_array_foreach(Nai_Token, tok, &result.tokens) {
                 tok->position = content.count;
 
                 nai_str_appendf(&content, NAI_SV_FMT" ", NAI_SV_ARG(tok->value));
@@ -582,6 +622,44 @@ void nai_ts_write_file(const char *file_name, Nai_Token_Stream ts)
     nai_write_file(file_name, ts.content);
 }
 
+bool nai_ts_valid(Nai_Token_Stream *ts)
+{
+    return ts->index < ts->tokens.count;
+}
+
+bool nai_ts_consume_until(Nai_Token_Stream *ts, Nai_Token_Type value)
+{
+    Nai_Token_Stream copy = *ts;
+
+    while (nai_ts_valid(&copy) && nai_ts_tok(&copy).type != value) {
+        ++copy.index;
+    }
+
+    if (!nai_ts_valid(&copy)) return false;
+
+    ++copy.index;
+    *ts = copy;
+    return true;
+}
+
+Nai_Token_Stream nai_ts_start_from(Nai_Token_Stream *ts, size_t from)
+{
+    Nai_Token_Stream result = {0};
+
+    for (size_t i = from; i < ts->index; ++i) {
+       nai_array_append(&result.tokens, ts->tokens.items[i]);
+    }
+
+    return result;
+}
+
+void nai_ts_extend(Nai_Token_Stream *ts, Nai_Token_Stream other)
+{
+    nai_array_foreach(Nai_Token, tok, &other.tokens) {
+        nai_array_append(&ts->tokens, *tok);
+    }
+}
+
 
 #endif // NAI_HEADER_ONLY
 
@@ -615,11 +693,16 @@ void nai_ts_write_file(const char *file_name, Nai_Token_Stream ts)
 #define ts_tok nai_ts_tok
 #define ts_get_error nai_ts_get_error
 #define ts_balanced nai_ts_balanced
+#define ts_consume_until nai_ts_consume_until
 #define ts_match nai_ts_match
 #define ts_replace nai_ts_replace
 #define ts_fmt nai_ts_fmt
 #define ts_stringify nai_ts_stringify
 #define ts_write_file nai_ts_write_file
+#define ts_valid nai_ts_valid
+#define ts_render nai_ts_render
+#define ts_start_from nai_ts_start_from
+#define ts_extend nai_ts_extend
 #define lexer_to_ts nai_lexer_to_ts
 
 #endif // NAI_FORCE_PREFIX

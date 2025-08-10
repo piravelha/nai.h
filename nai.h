@@ -202,6 +202,7 @@ void nai_str_append(Nai_String *str, const char *s)
     size_t len = strlen(s);
     nai_str_reserve(str, str->count + len);
     memcpy(str->data + str->count, s, len);
+    str->count += len;
 }
 
 void nai_str_appendn(Nai_String *str, const char *s, size_t len)
