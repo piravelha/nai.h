@@ -74,12 +74,17 @@ typedef struct {
 } Nai_String;
 
 void nai_str_reserve(Nai_String *str, size_t size);
+
 void nai_str_append(Nai_String *str, const char *s);
+
 void nai_str_appendn(Nai_String *str, const char *s, size_t len);
+
 __attribute__((format(printf, 2, 3)))
 void nai_str_appendf(Nai_String *str, const char *fmt, ...);
+
 __attribute__((format(printf, 1, 2)))
 const char *nai_temp_sprintf(const char *fmt, ...);
+
 void nai_str_append_null(Nai_String *str);
 
 char *nai_str_to_cstr(Nai_String str);
@@ -93,13 +98,21 @@ typedef struct {
 #define NAI_SV_ARG(sv) (int) (sv).count, (sv).data
 
 Nai_String_View nai_str_to_sv(Nai_String str);
+
 Nai_String nai_sv_to_str(Nai_String_View sv);
+
 bool nai_sv_equals(Nai_String_View sv, const char *cstr);
+
 Nai_String_View nai_sv_chop_space(Nai_String_View *sv);
+
 Nai_String_View nai_sv_chop(Nai_String_View *sv, char delim);
+
 Nai_String_View nai_sv_split(Nai_String_View *sv, const char *delim);
+
 Nai_String_View nai_sv_trim(Nai_String_View sv);
+
 Nai_String_View nai_sv_chop_right(Nai_String_View sv, char delim);
+
 Nai_String_View nai_sv_from_cstr(const char *cstr);
 
 
