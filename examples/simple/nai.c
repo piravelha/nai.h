@@ -3,6 +3,10 @@
 
 int main(int argc, char **argv)
 {
+    char *mode;
+    Cmd cmd = {0};
+    int exit_code;
+
     REBUILD(argc, argv);
 
     arg_shift(&argc, &argv);
@@ -13,9 +17,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    char *mode = arg_shift(&argc, &argv);
-
-    Cmd cmd = {0};
+    *mode = arg_shift(&argc, &argv);
     cmd_append(&cmd, "cc", "main.c", "-o", "main");
 
     if (!strcmp(mode, "debug")) {
@@ -27,7 +29,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    int exit_code = cmd_run(cmd, .debug = true);
+    exit_code = cmd_run(cmd, .debug = true);
 
     if (exit_code == 0) {
         log_info("Compiled successfully");
