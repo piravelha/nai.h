@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 typedef enum {
-    COLOR_RED,
+    COLOR_RED = 69,
     COLOR_GREEN,
     COLOR_BLUE,
 } Color;
@@ -20,7 +20,7 @@ void print_enums(Color color, Fruit fruit)
 
 int main(void)
 {
-    print_enums(COLOR_BLUE, FRUIT_BANANA);
+    print_enums(COLOR_RED, FRUIT_BANANA);
     return 0;
 }
 

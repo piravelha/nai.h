@@ -83,6 +83,9 @@ typedef struct {
 } Nai_Token_Stream;
 
 
+#define TRY(...) if(!(__VA_ARGS__)) return false
+
+
 Nai_Token_Stream nai_lex_sv(const char *file_name, Nai_String_View content);
 Nai_Token_Stream nai_lex_file(const char *file_name);
 

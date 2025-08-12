@@ -4,38 +4,44 @@
 
 bool transform(Token_Stream *in, Token_Stream *out)
 {
-    if (!ts_expect_id(in, "FILE")) return false;
-    if (!ts_expect_type(in, '(')) return false;
+    String_View path;
+    String content = {0};
+    String_View trimmed;
 
-    String_View path = ts_tok(in).value;
-    if (!ts_expect_type(in, TT_STRING)) return false;
-
-    if (!ts_expect_type(in, ')')) return false;
+    TRY(ts_expect_value(in, "FILE"));
+    TRY(ts_expect_type(in, '('));
+    path = ts_value(*in);
+    TRY(ts_expect_type(in, TT_STRING));
+    TRY(ts_expect_type(in, ')'));
 
     // trim double quotes from string literal
     path.data++;
     path.count -= 2;
 
-    String content = {0};
-    if (!read_file_sv(path, &content)) return false;
+    TRY(read_file_sv(path, &content));
 
-    String_View trimmed = sv_trim(str_to_sv(content));
+    trimmed = sv_trim(str_to_sv(content));
+    *out = ts_fmt("\"%.*s\"", SV(trimmed));
 
-    *out = ts_fmt("\""SV_FMT"\"", SV_ARG(trimmed));
     return true;
 }
 
 int main(int argc, char **argv)
 {
+    Token_Stream stream;
+    Cmd cmd = {0};
+    const char *generated = ".generated.c";
+    
     REBUILD(argc, argv);
 
-    Token_Stream stream = ts_replace(lex_file("main.c"), transform);
-    write_file(".generated.c", stream.content);
+    stream = lex_file("main.c");
+    stream = ts_replace(stream, transform);
+    write_file(generated, stream.content);
 
-    Cmd cmd = {0};
-    cmd_append(&cmd, "cc", ".generated.c", "-o", "main");
+    cmd_append(&cmd, "cc", generated, "-o", "main");
     cmd_run(cmd);
 
+    format_file(generated);
     return 0;
 }
 

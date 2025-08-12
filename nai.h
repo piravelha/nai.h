@@ -97,6 +97,8 @@ typedef struct {
 #define NAI_SV_FMT "%.*s"
 #define NAI_SV_ARG(sv) (int) (sv).count, (sv).data
 
+#define NAI_SV NAI_SV_ARG
+
 Nai_String_View nai_str_to_sv(Nai_String str);
 
 Nai_String nai_sv_to_str(Nai_String_View sv);
@@ -157,12 +159,11 @@ void nai_cmd_append_(Nai_Cmd *cmd, ...);
 Nai_String nai_cmd_render(Nai_Cmd cmd);
 
 typedef struct {
-    Nai_Cmd cmd;
     bool debug;
 } Nai_Cmd_Run_Params_;
 
-int nai_cmd_run_(Nai_Cmd_Run_Params_ ps);
-#define nai_cmd_run(...) nai_cmd_run_((Nai_Cmd_Run_Params_){__VA_ARGS__})
+int nai_cmd_run_(Nai_Cmd cmd, Nai_Cmd_Run_Params_ ps);
+#define nai_cmd_run(cmd, ...) nai_cmd_run_(cmd, (Nai_Cmd_Run_Params_){__VA_ARGS__})
 
 
 #define NAI_REBUILD(argc, argv) nai_rebuild_metaprogram_if_needed(argc, argv, __FILE__)
@@ -538,9 +539,9 @@ Nai_String nai_cmd_render(Nai_Cmd cmd)
     return sb;
 }
 
-int nai_cmd_run_(Nai_Cmd_Run_Params_ ps)
+int nai_cmd_run_(Nai_Cmd cmd, Nai_Cmd_Run_Params_ ps)
 {
-    Nai_String sb = nai_cmd_render(ps.cmd);
+    Nai_String sb = nai_cmd_render(cmd);
 
     if (ps.debug) {
         nai_log_info("\x1b[2m+ "NAI_SV_FMT"\x1b[0m", NAI_SV_ARG(sb));
@@ -615,6 +616,7 @@ const char *nai_sprint_number(double f)
 #define String_View Nai_String_View
 #define SV_FMT NAI_SV_FMT
 #define SV_ARG NAI_SV_ARG
+#define SV NAI_SV
 #define str_to_sv nai_str_to_sv
 #define sv_to_sb nai_sv_to_sb
 #define sv_equals nai_sv_equals

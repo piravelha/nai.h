@@ -22,7 +22,7 @@ bool process_enums(Token_Stream *in, Token_Stream *out)
             return false;
         }
 
-        str_appendf(&names, "    ["SV_FMT"] = \""SV_FMT"\",\n", SV_ARG(name), SV_ARG(name));
+        str_appendf(&names, "    case "SV_FMT": return \""SV_FMT"\"; break;\n", SV_ARG(name), SV_ARG(name));
     }
 
     String_View enum_name = ts_value(*in);
@@ -31,9 +31,12 @@ bool process_enums(Token_Stream *in, Token_Stream *out)
 
     String result = {0};
 
-    str_appendf(&result, "const char *_names_"SV_FMT"[] = {\n", SV_ARG(enum_name));
+    str_appendf(&result, "const char *_names_"SV_FMT"("SV_FMT" _)\n", SV_ARG(enum_name), SV_ARG(enum_name));
+    str_append(&result , "{\n");
+    str_append(&result , "    switch (_) {\n");
     str_appendf(&result, SV_FMT, SV_ARG(names));
-    str_append(&result, "};");
+    str_append(&result , "    }\n");
+    str_append(&result, "}");
 
     ts_extend(out, ts_start_from(in, start));
     ts_extend(out, ts_fmt(SV_FMT, SV_ARG(result)));
@@ -50,7 +53,7 @@ bool process_enum_name(Token_Stream *in, Token_Stream *out)
     if (!ts_expect_type(&content, TT_ID)) return false;
     if (!ts_expect_value(&content, ":")) return false;
 
-    *out = ts_fmt("_names_"SV_FMT"["SV_FMT"]", SV_ARG(type), SV_ARG(ts_render(content)));
+    *out = ts_fmt("_names_"SV_FMT"("SV_FMT")", SV_ARG(type), SV_ARG(ts_render(content)));
     return true;
 }
 
