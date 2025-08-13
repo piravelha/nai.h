@@ -109,8 +109,6 @@ Nai_String_View nai_sv_chop_space(Nai_String_View *sv);
 
 Nai_String_View nai_sv_chop(Nai_String_View *sv, char delim);
 
-Nai_String_View nai_sv_split(Nai_String_View *sv, const char *delim);
-
 Nai_String_View nai_sv_trim(Nai_String_View sv);
 
 Nai_String_View nai_sv_chop_right(Nai_String_View sv, char delim);
@@ -142,6 +140,13 @@ Nai_String_View nai_sv_from_cstr(const char *cstr);
     } \
     (array)->items[(array)->count++] = (__VA_ARGS__); \
 } while (0)
+
+
+typedef Nai_Array(Nai_String_View) Nai_String_Views;
+
+Nai_String_Views nai_sv_split(Nai_String_View sv, const char *delim);
+Nai_String_Views nai_sv_split_spaces(Nai_String_View sv);
+
 
 
 #define nai_array_foreach(type, x, array) for (type *x = (array)->items; x != (array)->items + (array)->count; ++x)
@@ -366,29 +371,73 @@ Nai_String_View nai_sv_chop(Nai_String_View *sv, char delim)
     return *sv;
 }
 
-Nai_String_View nai_sv_split(Nai_String_View *sv, const char *delim)
+Nai_String_Views nai_sv_split(Nai_String_View sv, const char *delim)
 {
-    const char *data = sv->data;
+    Nai_String_Views result = {0};
+
+    const char *data = sv.data;
     size_t len = strlen(delim);
+
+    Nai_String_View last = sv;
     
-    while (sv->count) {
-        if (!strncmp(sv->data, delim, len)) {
+    while (sv.count) {
+        if (!strncmp(sv.data, delim, len)) {
             Nai_String_View chopped = {
                 .data = data,
-                .count = sv->data - data,
+                .count = sv.data - data,
             };
 
-            sv->data += len;
-            sv->count -= len;
+            sv.data += len;
+            sv.count -= len;
 
-            return chopped;
+            nai_array_append(&result, chopped);
+            data = sv.data;
+
+            last = sv;
+            continue;
         }
 
-        ++sv->data;
-        --sv->count;
+        ++sv.data;
+        --sv.count;
     }
 
-    return *sv;
+    nai_array_append(&result, last);
+
+    return result;
+}
+
+
+Nai_String_Views nai_sv_split_spaces(Nai_String_View sv)
+{
+    Nai_String_Views result = {0};
+
+    const char *data = sv.data;
+    
+    while (sv.count) {
+        if (isspace(sv.data[0])) {
+            while (isspace(sv.data[0])) {
+                ++sv.data;
+                --sv.count;
+            }
+
+            Nai_String_View chopped = {
+                .data = data,
+                .count = sv.data - data,
+            };
+
+            nai_array_append(&result, chopped);
+            data = sv.data;
+
+            continue;
+        }
+
+        ++sv.data;
+        --sv.count;
+    }
+
+    nai_array_append(&result, sv);
+
+    return result;
 }
 
 
@@ -614,6 +663,7 @@ const char *nai_sprint_number(double f)
 #define str_append_null nai_str_append_null
 #define str_to_cstr nai_str_to_cstr
 #define String_View Nai_String_View
+#define String_Views Nai_String_Views
 #define SV_FMT NAI_SV_FMT
 #define SV_ARG NAI_SV_ARG
 #define SV NAI_SV

@@ -1,13 +1,14 @@
-#include "../../nai.h"
-#include "../../nai_macro.h"
+#define NAI_FLAGS "-I../../"
+#include "nai_macro.h"
 
 
 bool process_enums(Token_Stream *in, Token_Stream *out)
 {
     size_t start = in->index;
 
-    if (!ts_expect_value(in, "enum")) return false;
-    if (!ts_expect_type(in, '{')) return false;
+    TRY(ts_expect_value(in, "typedef"));
+    TRY(ts_expect_value(in, "enum"));
+    TRY(ts_expect_type(in, '{'));
 
     String names = {0};
 
@@ -15,45 +16,45 @@ bool process_enums(Token_Stream *in, Token_Stream *out)
         if (ts_expect_type(in, '}')) break;
         
         String_View name = ts_value(*in);
-        if (!ts_expect_type(in, TT_ID)) return false;
 
-        if (!ts_consume_until(in, ',')) {
-            if (ts_consume_until(in, '}')) break;
-            return false;
-        }
+        TRY(ts_expect_type(in, TT_ID));
+        TRY(ts_consume_until(in, ','));
 
-        str_appendf(&names, "    case "SV_FMT": return \""SV_FMT"\"; break;\n", SV_ARG(name), SV_ARG(name));
+        str_appendf(&names, "    case %.*s: return \"%.*s\";\n", SV(name), SV(name));
     }
 
     String_View enum_name = ts_value(*in);
-    if (!ts_expect_type(in, TT_ID)) return false;
-    if (!ts_expect_type(in, ';')) return false;
+    TRY(ts_expect_type(in, TT_ID));
+    TRY(ts_expect_type(in, ';'));
 
     String result = {0};
 
-    str_appendf(&result, "const char *_names_"SV_FMT"("SV_FMT" _)\n", SV_ARG(enum_name), SV_ARG(enum_name));
+    str_appendf(&result, "const char *_names_%.*s(%.*s _)\n", SV(enum_name), SV(enum_name));
     str_append(&result , "{\n");
     str_append(&result , "    switch (_) {\n");
-    str_appendf(&result, SV_FMT, SV_ARG(names));
+    str_appendf(&result, "%.*s", SV(names));
     str_append(&result , "    }\n");
     str_append(&result, "}");
 
     ts_extend(out, ts_start_from(in, start));
-    ts_extend(out, ts_fmt(SV_FMT, SV_ARG(result)));
+    ts_extend(out, ts_fmt("%.*s", SV(result)));
 
     return true;
 }
 
 bool process_enum_name(Token_Stream *in, Token_Stream *out)
 {
+    TRY(ts_expect_value(in, "nameof"));
+
     Token_Stream content = {0};
-    if (!ts_balanced(in, &content, "[", "]")) return false;
+    TRY(ts_balanced(in, &content, "(", ")"));
 
     String_View type = ts_value(content);
-    if (!ts_expect_type(&content, TT_ID)) return false;
-    if (!ts_expect_value(&content, ":")) return false;
+    TRY(ts_expect_type(&content, TT_ID));
+    TRY(ts_expect_type(&content, ','));
+    String value = ts_render(content);
 
-    *out = ts_fmt("_names_"SV_FMT"("SV_FMT")", SV_ARG(type), SV_ARG(ts_render(content)));
+    *out = ts_fmt("_names_%.*s(%.*s)", SV(type), SV(value));
     return true;
 }
 
@@ -70,8 +71,8 @@ int main(int argc, char **argv)
 
     Cmd cmd = {0};
     cmd_append(&cmd, "cc", ".generated.c", "-o", "main");
+
     int exit_code = cmd_run(cmd, .debug = true);
-    
     return exit_code;
 }
 

@@ -15,7 +15,8 @@ typedef enum {
 void print_enums(Color color, Fruit fruit)
 {
     printf("color = %s, fruit = %s\n",
-           [Color: color], [Fruit: fruit]);
+           nameof(Color, color),
+           nameof(Fruit, fruit));
 }
 
 int main(void)

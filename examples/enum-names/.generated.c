@@ -9,13 +9,10 @@ const char *_names_Color(Color _) {
     switch (_) {
     case COLOR_RED:
         return "COLOR_RED";
-        break;
     case COLOR_GREEN:
         return "COLOR_GREEN";
-        break;
     case COLOR_BLUE:
         return "COLOR_BLUE";
-        break;
     }
 }
 typedef enum {
@@ -27,13 +24,10 @@ const char *_names_Fruit(Fruit _) {
     switch (_) {
     case FRUIT_APPLE:
         return "FRUIT_APPLE";
-        break;
     case FRUIT_BANANA:
         return "FRUIT_BANANA";
-        break;
     case FRUIT_ORANGE:
         return "FRUIT_ORANGE";
-        break;
     }
 }
 void print_enums(Color color, Fruit fruit) {
