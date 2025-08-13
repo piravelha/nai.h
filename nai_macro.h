@@ -29,6 +29,7 @@ SOFTWARE. */
 
 
 typedef enum {
+    NAI_TT_EOF = -1,
     NAI_TT_INVALID = 0,
     NAI_TT_ID = 256,
     NAI_TT_INTEGER,
@@ -36,6 +37,9 @@ typedef enum {
     NAI_TT_CHARACTER,
     NAI_TT_INCLUDE_STRING,
     NAI_TT_PREPROC,
+    NAI_TT_TIMES_EQUAL,
+    NAI_TT_PLUS_PLUS,
+    NAI_TT_MINUS_MINUS,
     NAI_TT_BITWISE_AND,
     NAI_TT_BITWISE_OR,
     NAI_TT_LESS_EQUAL,
@@ -90,10 +94,6 @@ Nai_Token_Stream nai_lex_sv(const char *file_name, Nai_String_View content);
 Nai_Token_Stream nai_lex_file(const char *file_name);
 
 
-
-typedef Nai_Array(void) Nai_Generic_Array;
-
-
 bool nai_ts_expect_type(Nai_Token_Stream *stream, Nai_Token_Type type);
 bool nai_ts_expect_value(Nai_Token_Stream *stream, const char *value);
 bool nai_ts_consume_until(Nai_Token_Stream *stream, Nai_Token_Type value);
@@ -110,6 +110,10 @@ Nai_String nai_ts_render(Nai_Token_Stream ts);
 #define nai_ts_fmt(fmt, ...) nai_lex_sv("<temp>", nai_sv_from_cstr(nai_temp_sprintf(fmt, ##__VA_ARGS__)))
 #define nai_ts_stringify(...) nai_lex_sv("<temp>", nai_sv_from_cstr(#__VA_ARGS__))
 
+bool nai_ts_expect_eof(Nai_Token_Stream *stream);
+
+
+int nai_preprocess_file(const char *input_path, const char *output_path);
 
 #ifndef NAI_HEADER_ONLY
 
@@ -121,6 +125,9 @@ static const char *const nai_tt_debug_names[] = {
     [NAI_TT_CHARACTER] = "CHARACTER",
     [NAI_TT_INCLUDE_STRING] = "INCLUDE_STRING",
     [NAI_TT_PREPROC] = "PREPROC",
+    [NAI_TT_TIMES_EQUAL] = "*=",
+    [NAI_TT_PLUS_PLUS] = "++",
+    [NAI_TT_MINUS_MINUS] = "--",
     [NAI_TT_BITWISE_AND] = "&&",
     [NAI_TT_BITWISE_OR] = "||",
     [NAI_TT_LESS_EQUAL] = "<=",
@@ -341,6 +348,15 @@ Nai_Token_Stream nai_lex_sv(const char *file_name, Nai_String_View content)
         } else if (!strncmp(&content.data[lexer.position], "||", 2)) {
             lexer.position += 2;
             nai_lexer_append(&lexer, NAI_TT_BITWISE_OR);
+        } else if (!strncmp(&content.data[lexer.position], "++", 2)) {
+            lexer.position += 2;
+            nai_lexer_append(&lexer, NAI_TT_PLUS_PLUS);
+        } else if (!strncmp(&content.data[lexer.position], "--", 2)) {
+            lexer.position += 2;
+            nai_lexer_append(&lexer, NAI_TT_MINUS_MINUS);
+        } else if (!strncmp(&content.data[lexer.position], "*=", 2)) {
+            lexer.position += 2;
+            nai_lexer_append(&lexer, NAI_TT_TIMES_EQUAL);
         } else if (!strncmp(&content.data[lexer.position], "<=", 2)) {
             lexer.position += 2;
             nai_lexer_append(&lexer, NAI_TT_LESS_EQUAL);
@@ -433,6 +449,17 @@ bool nai_ts_expect_type(Nai_Token_Stream *stream, Nai_Token_Type type)
     }
 }
 
+bool nai_ts_expect_eof(Nai_Token_Stream *stream)
+{
+    if (!nai_ts_valid(*stream)) {
+        return true;
+    }
+
+    stream->expected_type = NAI_TT_EOF;
+    stream->got_value = nai_ts_value(*stream);
+    return false;
+}
+
 Nai_String_View nai_ts_value(Nai_Token_Stream stream)
 {
     if (stream.index < stream.tokens.count) {
@@ -459,7 +486,9 @@ const char *nai_ts_get_error(Nai_Token_Stream stream)
     if (stream.expected_value.data) {
         nai_str_appendf(&message, "Expected '"NAI_SV_FMT"', but got '"NAI_SV_FMT"' instead\n", NAI_SV_ARG(stream.expected_value), NAI_SV_ARG(stream.got_value));
     } else {
-        if (stream.expected_type <= 255) {
+        if (stream.expected_type == NAI_TT_EOF) {
+            nai_str_appendf(&message, "Expected EOF but got %.*s instead\n", NAI_SV(stream.got_value));
+        } else if (stream.expected_type <= 255) {
             nai_str_appendf(&message, "Expected '%c', but got '"NAI_SV_FMT"' instead\n", stream.expected_type, NAI_SV_ARG(stream.got_value));
         } else {
             nai_str_appendf(&message, "Expected '%s', but got '"NAI_SV_FMT"' instead\n", nai_tt_debug_names[stream.expected_type], NAI_SV_ARG(stream.got_value));
@@ -625,6 +654,13 @@ void nai_format_file(const char *path)
     cmd_run(cmd);
 }
 
+int nai_preprocess_file(const char *input_path, const char *output_path)
+{
+    Nai_Cmd cmd = {0};
+    cmd_append(&cmd, "cpp", input_path, output_path);
+    return cmd_run(cmd);
+}
+
 #endif // NAI_HEADER_ONLY
 
 
@@ -637,6 +673,9 @@ void nai_format_file(const char *path)
 #define TT_CHARACTER NAI_TT_CHARACTER
 #define TT_INCLUDE_STRING NAI_TT_INCLUDE_STRING
 #define TT_PREPROC NAI_TT_PREPROC
+#define TT_TIMES_EQUAL NAI_TT_TIMES_EQUAL
+#define TT_PLUS_PLUS NAI_TT_PLUS_PLUS
+#define TT_MINUS_MINUS NAI_TT_MINUS_MINUS
 #define TT_BITWISE_AND NAI_TT_BITWISE_AND
 #define TT_BITWISE_OR NAI_TT_BITWISE_OR
 #define TT_LESS_EQUAL NAI_TT_LESS_EQUAL
@@ -666,7 +705,9 @@ void nai_format_file(const char *path)
 #define ts_start_from nai_ts_start_from
 #define ts_extend nai_ts_extend
 #define format_file nai_format_file
+#define preprocess_file nai_preprocess_file
 #define lexer_to_ts nai_lexer_to_ts
+#define ts_expect_eof nai_ts_expect_eof
 
 #endif // NAI_FORCE_PREFIX
 

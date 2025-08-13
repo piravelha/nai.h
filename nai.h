@@ -115,6 +115,7 @@ Nai_String_View nai_sv_chop_right(Nai_String_View sv, char delim);
 
 Nai_String_View nai_sv_from_cstr(const char *cstr);
 
+int nai_sv_parse_int(Nai_String_View sv);
 
 
 #ifndef NAI_ARRAY_INIT_CAPACITY
@@ -172,6 +173,7 @@ int nai_cmd_run_(Nai_Cmd cmd, Nai_Cmd_Run_Params_ ps);
 
 
 #define NAI_REBUILD(argc, argv) nai_rebuild_metaprogram_if_needed(argc, argv, __FILE__)
+
 
 
 Nai_String nai_read_line(void);
@@ -640,6 +642,19 @@ const char *nai_sprint_number(double f)
     return nai_temp_sprintf(fmt, f);
 }
 
+int nai_sv_parse_int(Nai_String_View sv)
+{
+    Nai_String s = {0};
+    nai_str_appendf(&s, "%.*s", NAI_SV(sv));
+    nai_str_append_null(&s);
+
+    return atoi(s.data);
+}
+
+
+
+
+
 #endif // NAI_HEADER_ONLY
 
 
@@ -676,6 +691,7 @@ const char *nai_sprint_number(double f)
 #define sv_chop_space nai_sv_chop_space
 #define sv_chop_right nai_sv_chop_right
 #define sv_from_cstr nai_sv_from_cstr
+#define sv_parse_int nai_sv_parse_int
 #define Array Nai_Array
 #define array_append nai_array_append
 #define array_append nai_array_append
